@@ -72,20 +72,42 @@ PROJ_ALL_SIM_SRCS += $(PROJ_SIM_SRCS)
 PROJ_ALL_PREREQ += $(PROJ_PREREQ)
 
 # Include path
+ifeq ($(OS),Windows_NT)
+PROJ_SYNTH_INCLUDES := -I$(shell (cygpath -w $(abspath rtl/))) \
+$(addsuffix /rtl/, $(addprefix -I$(shell (cygpath -w $(NO2CORES_DIR)))/, $(PROJ_ALL_DEPS)))
+PROJ_SIM_INCLUDES   := -I$(shell (cygpath -w $(abspath sim/))) \
+$(addsuffix /sim/, $(addprefix -I$(shell (cygpath -w $(NO2CORES_DIR)))/, $(PROJ_ALL_DEPS)))
+else
 PROJ_SYNTH_INCLUDES := -I$(abspath rtl/) $(addsuffix /rtl/, $(addprefix -I$(NO2CORES_DIR)/, $(PROJ_ALL_DEPS)))
 PROJ_SIM_INCLUDES   := -I$(abspath sim/) $(addsuffix /sim/, $(addprefix -I$(NO2CORES_DIR)/, $(PROJ_ALL_DEPS)))
+endif
 
 
 # Synthesis & Place-n-route rules
 
 $(BUILD_TMP)/$(PROJ).ys: $(PROJ_TOP_SRC) $(PROJ_ALL_RTL_SRCS)
+ifeq ($(OS),Windows_NT)
+	@echo "read_verilog \
+	$(YOSYS_READ_ARGS) \
+	$(PROJ_SYNTH_INCLUDES)) \
+	$(shell (cygpath -w $(PROJ_TOP_SRC)))  \
+	$(shell (cygpath -w $(PROJ_ALL_RTL_SRCS)))" \
+	> $@
+else
 	@echo "read_verilog $(YOSYS_READ_ARGS) $(PROJ_SYNTH_INCLUDES) $(PROJ_TOP_SRC) $(PROJ_ALL_RTL_SRCS)" > $@
+endif
 	@echo "synth_ice40 $(YOSYS_SYNTH_ARGS) -top $(PROJ_TOP_MOD) -json $(PROJ).json" >> $@
 
 $(BUILD_TMP)/$(PROJ).synth.rpt $(BUILD_TMP)/$(PROJ).json: $(PROJ_ALL_PREREQ) $(BUILD_TMP)/$(PROJ).ys $(PROJ_ALL_RTL_SRCS)
+ifeq ($(OS),Windows_NT)
+	cd $(BUILD_TMP) && \
+		$(YOSYS) -s $(subst \,/, $(shell (cygpath -w $(BUILD_TMP)/$(PROJ).ys))) \
+			 -l $(subst \,/, $(shell (cygpath -w $(BUILD_TMP)/$(PROJ).synth.rpt)))
+else
 	cd $(BUILD_TMP) && \
 		$(YOSYS) -s $(BUILD_TMP)/$(PROJ).ys \
 			 -l $(BUILD_TMP)/$(PROJ).synth.rpt
+endif
 
 $(BUILD_TMP)/$(PROJ).pnr.rpt $(BUILD_TMP)/$(PROJ).asc: $(BUILD_TMP)/$(PROJ).json $(PIN_DEF)
 	$(NEXTPNR) $(NEXTPNR_ARGS) $(NEXTPNR_SYS_ARGS) \
